@@ -12,6 +12,7 @@
         /* --- Variáveis Globais de Estilo --- */
         :root {
             --primary-color: #6d28d9;
+            --secondary-color: #1d4ed8;
             --success-color: #22c55e;
             --error-color: #ef4444;
             --info-color: #3b82f6;
@@ -111,15 +112,30 @@
             gap: 8px;
         }
 
-        .action-button:hover {
+        .action-button#play-sound-btn {
+            background-color: var(--secondary-color);
+        }
+
+        .action-button:hover:not(:disabled) {
             transform: translateY(-3px);
             box-shadow: 0 10px 20px rgba(109, 40, 217, 0.3);
         }
 
-        .action-button:active {
+        .action-button#play-sound-btn:hover:not(:disabled) {
+            box-shadow: 0 10px 20px rgba(29, 78, 216, 0.3);
+        }
+
+        .action-button:active:not(:disabled) {
             transform: translateY(0);
             box-shadow: 0 5px 10px rgba(109, 40, 217, 0.2);
         }
+
+        .action-button:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
 
         /* --- Seção da Pauta Musical --- */
         .staff-container {
@@ -272,7 +288,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>🎵Clave de Sol</h1>
+        <h1>🎵 Clave de Sol</h1>
         
         <div class="controls">
             <div class="control-group">
@@ -286,6 +302,10 @@
             <button id="new-note-btn" class="action-button">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><path d="M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/><path d="M21 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/></svg>
                 Nova Nota
+            </button>
+            <button id="play-sound-btn" class="action-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                Tocar Som
             </button>
         </div>
 
@@ -330,21 +350,34 @@
             </div>
         </div>
     </div>
+    
+    <audio id="note-audio" style="display: none;"></audio>
 
     <script>
         // --- DADOS ESTÁTICOS E DE CONFIGURAÇÃO ---
         // Mapeamento de notas para posições na pauta (top em pixels) e linhas suplementares.
         const NOTE_POSITIONS = {
             basic: {
-                'E4':{ top: 140, note:'E' }, 'F4':{ top: 125, note:'F' }, 'G4':{ top: 110, note:'G' },
-                'A4':{ top: 95,  note:'A' }, 'B4':{ top: 80,  note:'B' }, 'C5':{ top: 65,  note:'C' },
-                'D5':{ top: 50,  note:'D' }, 'E5':{ top: 35,  note:'E' }, 'F5':{ top: 20,  note:'F' },
+                'E4':{ top: 140, note:'E' }, 
+                'F4':{ top: 125, note:'F' }, 
+                'G4':{ top: 110, note:'G' },
+                'A4':{ top: 95,  note:'A' }, 
+                'B4':{ top: 80,  note:'B' }, 
+                'C5':{ top: 65,  note:'C' },
+                'D5':{ top: 50,  note:'D' }, 
+                'E5':{ top: 35,  note:'E' }, 
+                'F5':{ top: 20,  note:'F' },
             },
             intermediate: {
-                'C4':{ top: 170, note:'C', ledgerLines:[170] }, 'B3':{ top: 185, note:'B', ledgerLines:[170] },
+                'D4':{ top: 155, note:'D' },
+                'C4':{ top: 170, note:'C', ledgerLines:[170] }, 
+                'B3':{ top: 185, note:'B', ledgerLines:[170] },
                 'A3':{ top: 200, note:'A', ledgerLines:[170, 200] },
-                'G5':{ top: 5,   note:'G', ledgerLines:[] }, 'A5':{ top: -10, note:'A', ledgerLines:[-10] },
-                'B5':{ top: -25, note:'B', ledgerLines:[-10] }, 'C6':{ top: -40, note:'C', ledgerLines:[-10, -40] },
+
+                'G5':{ top: 5,   note:'G', ledgerLines:[] }, 
+                'A5':{ top: -10, note:'A', ledgerLines:[-10] },
+                'B5':{ top: -25, note:'B', ledgerLines:[-10] }, 
+                'C6':{ top: -40, note:'C', ledgerLines:[-10, -40] },
             }
         };
 
@@ -356,6 +389,7 @@
             constructor() {
                 // Estado da aplicação
                 this.currentNote = null;
+                this.currentNoteFullName = null; // MODIFICAÇÃO: Guarda o nome completo da nota (ex: 'C4')
                 this.correctCount = 0;
                 this.incorrectCount = 0;
                 this.isAnswered = false; // Impede múltiplas respostas para a mesma nota
@@ -379,6 +413,9 @@
                 this.elements.correctCount = document.getElementById('correct-count');
                 this.elements.incorrectCount = document.getElementById('incorrect-count');
                 this.elements.totalCount = document.getElementById('total-count');
+                // MODIFICAÇÃO: Cache dos novos elementos
+                this.elements.playSoundBtn = document.getElementById('play-sound-btn');
+                this.elements.audioPlayer = document.getElementById('note-audio');
             }
 
             /** Configura todos os listeners de eventos. */
@@ -386,6 +423,9 @@
                 this.elements.difficultySelect.addEventListener('change', () => this.startNewRound());
                 this.elements.newNoteBtn.addEventListener('click', () => this.startNewRound());
                 
+                // MODIFICAÇÃO: Event listener para o botão de tocar som
+                this.elements.playSoundBtn.addEventListener('click', () => this.playSound());
+
                 // Delegação de evento para os botões de nota
                 this.elements.noteButtons.addEventListener('click', (e) => {
                     if (e.target.classList.contains('note-button')) {
@@ -409,6 +449,8 @@
             startNewRound() {
                 this.isAnswered = false;
                 this.clearFeedback();
+                this.currentNoteFullName = null; // MODIFICAÇÃO: Limpa o nome da nota
+                this.elements.playSoundBtn.disabled = true; // MODIFICAÇÃO: Desabilita o botão de som
                 this.generateNewNote();
             }
 
@@ -427,6 +469,9 @@
                 const positionData = availablePositions[randomKey];
                 
                 this.currentNote = positionData.note;
+                this.currentNoteFullName = randomKey; // MODIFICAÇÃO: Armazena o nome completo
+                this.elements.playSoundBtn.disabled = false; // MODIFICAÇÃO: Habilita o botão de som
+                
                 this.drawNote(positionData);
             }
 
@@ -469,6 +514,7 @@
                 this.correctCount++;
                 this.displayFeedback('✓ Correto!', 'correct');
                 this.elements.note.className = 'note correct';
+                this.playSound(); // MODIFICAÇÃO: Toca o som da nota correta
                 setTimeout(() => this.startNewRound(), 1200);
             }
 
@@ -478,6 +524,19 @@
                 const correctNoteName = NOTE_NAMES_PT[this.currentNote] || this.currentNote;
                 this.displayFeedback(`Incorreto! A nota era ${correctNoteName}`, 'incorrect');
                 this.elements.note.className = 'note incorrect';
+            }
+            
+            /** NOVO MÉTODO: Toca o som da nota atual. */
+            playSound() {
+                if (!this.currentNoteFullName) return; // Não faz nada se não houver nota
+                
+                const audioSrc = `notasMusicais/${this.currentNoteFullName}.mp3`;
+                this.elements.audioPlayer.src = audioSrc;
+                this.elements.audioPlayer.play().catch(error => {
+                    console.error("Erro ao tocar o áudio:", error);
+                    // Opcional: Avisar o usuário que o arquivo de áudio não foi encontrado.
+                    // this.displayFeedback('Arquivo de áudio não encontrado!', 'incorrect');
+                });
             }
 
             /** Atualiza o placar na interface. */
